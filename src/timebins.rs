@@ -10,9 +10,8 @@ use crate::duration::{
     duration_trunc_day, duration_trunc_hour, duration_trunc_month, duration_trunc_week,
     duration_trunc_year,
 };
-use crate::intent::IntentType;
+use crate::intent::{Intent, IntentType};
 use crate::retention::Retention;
-use crate::Intent;
 
 #[derive(Debug)]
 pub struct TimeBins<'a> {
@@ -41,7 +40,9 @@ impl<'a> TimeBins<'a> {
         let mut y: HashMap<DateTime<FixedOffset>, Rc<RefCell<Intent>>> = HashMap::new();
         let mut ry: Vec<DateTime<FixedOffset>> = Vec::new();
 
-        let now: DateTime<FixedOffset> = Local::now().into();
+        let local_now: DateTime<Local> = Local::now();
+        let now: DateTime<FixedOffset> = local_now.with_timezone(local_now.offset());
+        trace!("timebin creation now: {:?}", now);
 
         let this_hour = duration_trunc_hour(&now);
         for i in 0..=retention.h {
