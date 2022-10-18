@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::ops::Add;
 
-use chrono::{Datelike, DateTime, Duration, FixedOffset, Timelike, TimeZone, Utc, Weekday};
+use chrono::{DateTime, Datelike, Duration, FixedOffset, TimeZone, Timelike, Utc, Weekday};
 use regex::Regex;
 
 use crate::error::DurationParseError;
@@ -49,30 +49,46 @@ pub fn duration_from_str(s: &str) -> Result<Duration, Box<dyn Error>> {
 }
 
 pub fn duration_trunc_hour(ts: &DateTime<FixedOffset>) -> DateTime<FixedOffset> {
-    FixedOffset::from_offset(&ts.timezone()).ymd(ts.year(), ts.month(), ts.day()).and_hms(ts.hour(), 0, 0)
+    FixedOffset::from_offset(&ts.timezone())
+        .ymd(ts.year(), ts.month(), ts.day())
+        .and_hms(ts.hour(), 0, 0)
 }
 
 pub fn duration_trunc_day(ts: &DateTime<FixedOffset>) -> DateTime<FixedOffset> {
-    FixedOffset::from_offset(&ts.timezone()).ymd(ts.year(), ts.month(), ts.day()).and_hms(0, 0, 0)
+    FixedOffset::from_offset(&ts.timezone())
+        .ymd(ts.year(), ts.month(), ts.day())
+        .and_hms(0, 0, 0)
 }
 
 pub fn duration_trunc_week(ts: &DateTime<FixedOffset>) -> DateTime<FixedOffset> {
     let year = ts.year();
     for i in 1..=52 {
-        let mon = FixedOffset::from_offset(&ts.timezone()).isoywd(year, i, Weekday::Mon).and_hms(0, 0, 0);
-        let sun = FixedOffset::from_offset(&ts.timezone()).isoywd(year, i, Weekday::Sun).and_hms(23, 59, 59);
+        let mon = FixedOffset::from_offset(&ts.timezone())
+            .isoywd(year, i, Weekday::Mon)
+            .and_hms(0, 0, 0);
+        let sun = FixedOffset::from_offset(&ts.timezone())
+            .isoywd(year, i, Weekday::Sun)
+            .and_hms(23, 59, 59);
         if mon <= *ts && *ts <= sun {
-            return FixedOffset::from_offset(&ts.timezone()).isoywd(year, i, Weekday::Mon).and_hms(0, 0, 0);
+            return FixedOffset::from_offset(&ts.timezone())
+                .isoywd(year, i, Weekday::Mon)
+                .and_hms(0, 0, 0);
         }
     }
     panic!("did not find week");
-    Utc.ymd(ts.year(), ts.month(), ts.day()).and_hms(0, 0, 0).with_timezone(&ts.timezone())
+    Utc.ymd(ts.year(), ts.month(), ts.day())
+        .and_hms(0, 0, 0)
+        .with_timezone(&ts.timezone())
 }
 
 pub fn duration_trunc_month(ts: &DateTime<FixedOffset>) -> DateTime<FixedOffset> {
-    FixedOffset::from_offset(&ts.timezone()).ymd(ts.year(), ts.month(), 1).and_hms(0, 0, 0)
+    FixedOffset::from_offset(&ts.timezone())
+        .ymd(ts.year(), ts.month(), 1)
+        .and_hms(0, 0, 0)
 }
 
 pub fn duration_trunc_year(ts: &DateTime<FixedOffset>) -> DateTime<FixedOffset> {
-    FixedOffset::from_offset(&ts.timezone()).ymd(ts.year(), 1, 1).and_hms(0, 0, 0)
+    FixedOffset::from_offset(&ts.timezone())
+        .ymd(ts.year(), 1, 1)
+        .and_hms(0, 0, 0)
 }

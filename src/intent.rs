@@ -53,9 +53,12 @@ impl<'a> Intent<'a> {
     }
 
     pub fn print_tabled(intents: &[Rc<RefCell<Self>>]) {
-        let intents = intents.into_iter().map(|r| (*r.borrow()).clone()).collect::<Vec<_>>();
+        let intents = intents
+            .into_iter()
+            .map(|r| (*r.borrow()).clone())
+            .collect::<Vec<_>>();
         let table = Table::new(intents).with(Style::modern()).to_string();
-        println!("{}", table);
+        info!("{}", table);
     }
 
     pub fn gather_create_intents(jobs: &'a [Job]) -> Vec<Rc<RefCell<Self>>> {
@@ -143,7 +146,8 @@ impl<'a> Intent<'a> {
 
             match &job.preserve.min {
                 PreservePolicyMin::Variant(PreservePolicyMinVariants::All) => {
-                    job_intents.for_each(|(_ts, int)| (*int).borrow_mut().intent = IntentType::Keep);
+                    job_intents
+                        .for_each(|(_ts, int)| (*int).borrow_mut().intent = IntentType::Keep);
                 }
                 PreservePolicyMin::Variant(PreservePolicyMinVariants::Latest) => {
                     job_intents
@@ -155,13 +159,17 @@ impl<'a> Intent<'a> {
                     match d {
                         Err(e) => {
                             warn!("error while handling preserve min for job: {}\nerror: {}\nfor safety, will not delete any snapshots from this job!", &job.subvolume, e);
-                            job_intents.for_each(|(_ts, int)| (*int).borrow_mut().intent = IntentType::Keep);
+                            job_intents.for_each(|(_ts, int)| {
+                                (*int).borrow_mut().intent = IntentType::Keep
+                            });
                         }
                         Ok(d) => {
                             debug!("parsed duration for preserve min: {:?}", d);
                             job_intents
                                 .take_while(|(ts, _int)| ts > &Local::now().sub(d))
-                                .for_each(|(_ts, int)| (*int).borrow_mut().intent = IntentType::Keep)
+                                .for_each(|(_ts, int)| {
+                                    (*int).borrow_mut().intent = IntentType::Keep
+                                })
                         }
                     };
                 }
@@ -188,7 +196,8 @@ impl<'a> Intent<'a> {
             match retention {
                 Err(e) => {
                     warn!("error while handling preserve retention for job: {}\nerror: {}\nfor safety, will not delete any snapshots from this job!", &job.subvolume, e);
-                    job_intents.for_each(|(_ts, int)| (*int).borrow_mut().intent = IntentType::Keep);
+                    job_intents
+                        .for_each(|(_ts, int)| (*int).borrow_mut().intent = IntentType::Keep);
                 }
                 Ok(retention) => {
                     let mut timebins = TimeBins::new(&retention);

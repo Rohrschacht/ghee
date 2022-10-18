@@ -1,7 +1,8 @@
 use std::fs;
+use std::io::Write;
 
 use clap::{Parser, Subcommand};
-use clap_verbosity_flag::WarnLevel;
+use clap_verbosity_flag::InfoLevel;
 use log::{debug, error, info, trace, warn};
 use serde::Deserialize;
 
@@ -26,7 +27,7 @@ struct Cli {
     #[clap(subcommand)]
     command: Commands,
     #[clap(flatten)]
-    verbose: clap_verbosity_flag::Verbosity<WarnLevel>,
+    verbose: clap_verbosity_flag::Verbosity<InfoLevel>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -63,12 +64,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Cli = Cli::parse();
     debug!("program arguments: {:?}", args);
 
-    simple_logger::SimpleLogger::new()
-        .with_level(args.verbose.log_level_filter())
-        .with_colors(true)
-        .without_timestamps()
-        .init()
-        .unwrap();
+    env_logger::Builder::new()
+        .format(|buf, record| {
+            if record.level() == log::Level::Info {
+                writeln!(buf, "{}", record.args())
+            } else {
+                writeln!(buf, "[{}] - {}", record.level(), record.args())
+            }
+        })
+        .filter_level(args.verbose.log_level_filter())
+        .init();
 
     let config = fs::read_to_string(args.config)?;
     debug!("configuration content:\n{}", config);
