@@ -1,6 +1,5 @@
 use std::cmp::Reverse;
 use std::error::Error;
-use std::fmt::{Display, Formatter};
 use std::fs;
 use std::ops::{Add, Sub};
 use std::path::Path;
@@ -11,6 +10,12 @@ use libbtrfsutil as btrfs;
 use regex::Regex;
 use serde::Deserialize;
 use tabled::{Style, Table, Tabled};
+
+use crate::error::DurationParseError;
+use crate::retention::Retention;
+
+mod retention;
+mod error;
 
 /// Automated btrfs snapshots
 #[derive(Debug, Parser)]
@@ -130,17 +135,6 @@ fn filter_jobs(jobs: &[Job], groups: &[String]) -> Vec<Job> {
     filtered_jobs
 }
 
-#[derive(Debug)]
-struct DurationParseError;
-
-impl Display for DurationParseError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Error while parsing Duration from String")
-    }
-}
-
-impl Error for DurationParseError {}
-
 fn duration_from_str(s: &str) -> Result<Duration, Box<dyn Error>> {
     let re = Regex::new(r"^(?:(\d+)h)?\s*(?:(\d+)d)?\s*(?:(\d+)w)?\s*(?:(\d+)m)?\s*(?:(\d+)y)?$")
         .unwrap();
@@ -181,43 +175,6 @@ fn duration_from_str(s: &str) -> Result<Duration, Box<dyn Error>> {
     }
 
     Ok(d)
-}
-
-fn retention_from_str(s: &str) -> Result<(usize, usize, usize, usize, usize), Box<dyn Error>> {
-    let re = Regex::new(r"^(?:(\d+)h)?\s*(?:(\d+)d)?\s*(?:(\d+)w)?\s*(?:(\d+)m)?\s*(?:(\d+)y)?$")
-        .unwrap();
-
-    if !re.is_match(s) {
-        return Err(Box::new(DurationParseError));
-    };
-
-    let capture = re.captures(s).unwrap();
-
-    let hours = capture.get(1);
-    let days = capture.get(2);
-    let weeks = capture.get(3);
-    let months = capture.get(4);
-    let years = capture.get(5);
-
-    let mut r = (0, 0, 0, 0, 0);
-
-    if let Some(h) = hours {
-        r.0 = h.as_str().parse().unwrap()
-    }
-    if let Some(days) = days {
-        r.1 = days.as_str().parse().unwrap()
-    }
-    if let Some(w) = weeks {
-        r.2 = w.as_str().parse().unwrap()
-    }
-    if let Some(m) = months {
-        r.3 = m.as_str().parse().unwrap()
-    }
-    if let Some(y) = years {
-        r.4 = y.as_str().parse().unwrap()
-    }
-
-    Ok(r)
 }
 
 fn gather_create_intents(jobs: &[Job]) -> Vec<Intent> {
@@ -368,14 +325,13 @@ fn delete_to_keep_intents(intents: &mut Vec<Intent>, jobs: &[Job]) {
         job_intents.sort_by_key(|t| Reverse(t.0));
         let job_intents = job_intents.into_iter();
 
-        let retention = retention_from_str(&job.preserve.retention);
+        let retention = Retention::from_str(&job.preserve.retention);
         match retention {
             Err(e) => {
                 eprintln!("error while handling preserve retention for job: {}\nerror: {}\nfor safety, will not delete any snapshots from this job!", &job.subvolume, e);
                 job_intents.for_each(|t| t.1.intent = IntentType::Keep);
             }
             Ok(retention) => {
-                let (hours, days, weeks, months, years) = retention;
                 let oldest: DateTime<FixedOffset> = Utc.ymd(0, 1, 1).and_hms(0, 0, 0).into();
 
                 let timebinned_intents = job_intents
@@ -390,33 +346,33 @@ fn delete_to_keep_intents(intents: &mut Vec<Intent>, jobs: &[Job]) {
 
                 let hourly_indexes = timebins_current_and_next
                     .clone()
-                    .filter(|t| t.1 .0 .0 != t.1 .1 .0)
+                    .filter(|t| t.1.0.0 != t.1.1.0)
                     .map(|t| t.0)
-                    .take(hours)
+                    .take(retention.h)
                     .collect::<Vec<_>>();
                 let daily_indexes = timebins_current_and_next
                     .clone()
-                    .filter(|t| t.1 .0 .1 != t.1 .1 .1)
+                    .filter(|t| t.1.0.1 != t.1.1.1)
                     .map(|t| t.0)
-                    .take(days)
+                    .take(retention.d)
                     .collect::<Vec<_>>();
                 let weekly_indexes = timebins_current_and_next
                     .clone()
-                    .filter(|t| t.1 .0 .2 != t.1 .1 .2)
+                    .filter(|t| t.1.0.2 != t.1.1.2)
                     .map(|t| t.0)
-                    .take(weeks)
+                    .take(retention.w)
                     .collect::<Vec<_>>();
                 let monthly_indexes = timebins_current_and_next
                     .clone()
-                    .filter(|t| t.1 .0 .3 != t.1 .1 .3)
+                    .filter(|t| t.1.0.3 != t.1.1.3)
                     .map(|t| t.0)
-                    .take(months)
+                    .take(retention.m)
                     .collect::<Vec<_>>();
                 let yearly_indexes = timebins_current_and_next
                     .clone()
-                    .filter(|t| t.1 .0 .4 != t.1 .1 .4)
+                    .filter(|t| t.1.0.4 != t.1.1.4)
                     .map(|t| t.0)
-                    .take(years)
+                    .take(retention.y)
                     .collect::<Vec<_>>();
 
                 println!("{:?}", hourly_indexes);
