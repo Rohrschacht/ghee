@@ -1,13 +1,12 @@
 use std::cmp::Reverse;
-use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::ops::{Add, Sub};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use chrono::{DateTime, Duration, DurationRound, FixedOffset, Local, SecondsFormat};
-use clap::{Args, Parser, Subcommand};
+use chrono::{DateTime, Duration, DurationRound, FixedOffset, Local, SecondsFormat, TimeZone, Utc};
+use clap::{Parser, Subcommand};
 use libbtrfsutil as btrfs;
 use regex::Regex;
 use serde::Deserialize;
@@ -149,7 +148,7 @@ fn duration_from_str(s: &str) -> Result<Duration, Box<dyn Error>> {
 
     if !re.is_match(s) {
         return Err(Box::new(DurationParseError));
-    }
+    };
 
     let capture = re.captures(s).unwrap();
 
@@ -182,6 +181,43 @@ fn duration_from_str(s: &str) -> Result<Duration, Box<dyn Error>> {
     }
 
     Ok(d)
+}
+
+fn retention_from_str(s: &str) -> Result<(usize, usize, usize, usize, usize), Box<dyn Error>> {
+    let re = Regex::new(r"^(?:(\d+)h)?\s*(?:(\d+)d)?\s*(?:(\d+)w)?\s*(?:(\d+)m)?\s*(?:(\d+)y)?$")
+        .unwrap();
+
+    if !re.is_match(s) {
+        return Err(Box::new(DurationParseError));
+    };
+
+    let capture = re.captures(s).unwrap();
+
+    let hours = capture.get(1);
+    let days = capture.get(2);
+    let weeks = capture.get(3);
+    let months = capture.get(4);
+    let years = capture.get(5);
+
+    let mut r = (0, 0, 0, 0, 0);
+
+    if let Some(h) = hours {
+        r.0 = h.as_str().parse().unwrap()
+    }
+    if let Some(days) = days {
+        r.1 = days.as_str().parse().unwrap()
+    }
+    if let Some(w) = weeks {
+        r.2 = w.as_str().parse().unwrap()
+    }
+    if let Some(m) = months {
+        r.3 = m.as_str().parse().unwrap()
+    }
+    if let Some(y) = years {
+        r.4 = y.as_str().parse().unwrap()
+    }
+
+    Ok(r)
 }
 
 fn gather_create_intents(jobs: &[Job]) -> Vec<Intent> {
@@ -259,6 +295,23 @@ fn timestamp_from_intent(intent: &Intent) -> DateTime<FixedOffset> {
     timestamp
 }
 
+fn time_bins_from_timestamp(
+    ts: &DateTime<FixedOffset>,
+) -> (
+    DateTime<FixedOffset>,
+    DateTime<FixedOffset>,
+    DateTime<FixedOffset>,
+    DateTime<FixedOffset>,
+    DateTime<FixedOffset>,
+) {
+    let hourly = ts.duration_trunc(Duration::hours(1)).unwrap();
+    let daily = ts.duration_trunc(Duration::days(1)).unwrap();
+    let weekly = ts.duration_trunc(Duration::weeks(1)).unwrap();
+    let monthly = ts.duration_trunc(Duration::weeks(4)).unwrap();
+    let yearly = ts.duration_trunc(Duration::days(365)).unwrap();
+    (hourly, daily, weekly, monthly, yearly)
+}
+
 fn delete_to_keep_intents(intents: &mut Vec<Intent>, jobs: &[Job]) {
     for job in jobs {
         let delete_intents = intents
@@ -303,7 +356,97 @@ fn delete_to_keep_intents(intents: &mut Vec<Intent>, jobs: &[Job]) {
             }
         };
 
-        // TODO parse retention policy and set corresponding intents to keep
+        // parse retention policy and set corresponding intents to keep
+        let delete_intents = intents
+            .into_iter()
+            .filter(|i| i.intent == IntentType::Delete)
+            .map(|i| (timestamp_from_intent(&i), i));
+
+        let mut job_intents = delete_intents
+            .filter(|t| t.1.job == job)
+            .collect::<Vec<_>>();
+        job_intents.sort_by_key(|t| Reverse(t.0));
+        let job_intents = job_intents.into_iter();
+
+        let retention = retention_from_str(&job.preserve.retention);
+        match retention {
+            Err(e) => {
+                eprintln!("error while handling preserve retention for job: {}\nerror: {}\nfor safety, will not delete any snapshots from this job!", &job.subvolume, e);
+                job_intents.for_each(|t| t.1.intent = IntentType::Keep);
+            }
+            Ok(retention) => {
+                let (hours, days, weeks, months, years) = retention;
+                let oldest: DateTime<FixedOffset> = Utc.ymd(0, 1, 1).and_hms(0, 0, 0).into();
+
+                let timebinned_intents = job_intents
+                    .map(|t| time_bins_from_timestamp(&t.0))
+                    .chain([(oldest, oldest, oldest, oldest, oldest)])
+                    .collect::<Vec<_>>();
+
+                let timebins_current_and_next = timebinned_intents
+                    .iter()
+                    .zip(timebinned_intents.iter().skip(1))
+                    .enumerate();
+
+                let hourly_indexes = timebins_current_and_next
+                    .clone()
+                    .filter(|t| t.1 .0 .0 != t.1 .1 .0)
+                    .map(|t| t.0)
+                    .take(hours)
+                    .collect::<Vec<_>>();
+                let daily_indexes = timebins_current_and_next
+                    .clone()
+                    .filter(|t| t.1 .0 .1 != t.1 .1 .1)
+                    .map(|t| t.0)
+                    .take(days)
+                    .collect::<Vec<_>>();
+                let weekly_indexes = timebins_current_and_next
+                    .clone()
+                    .filter(|t| t.1 .0 .2 != t.1 .1 .2)
+                    .map(|t| t.0)
+                    .take(weeks)
+                    .collect::<Vec<_>>();
+                let monthly_indexes = timebins_current_and_next
+                    .clone()
+                    .filter(|t| t.1 .0 .3 != t.1 .1 .3)
+                    .map(|t| t.0)
+                    .take(months)
+                    .collect::<Vec<_>>();
+                let yearly_indexes = timebins_current_and_next
+                    .clone()
+                    .filter(|t| t.1 .0 .4 != t.1 .1 .4)
+                    .map(|t| t.0)
+                    .take(years)
+                    .collect::<Vec<_>>();
+
+                println!("{:?}", hourly_indexes);
+                println!("{:?}", daily_indexes);
+                println!("{:?}", weekly_indexes);
+                println!("{:?}", monthly_indexes);
+                println!("{:?}", yearly_indexes);
+
+                let mut delete_intents = intents
+                    .into_iter()
+                    .filter(|i| i.intent == IntentType::Delete)
+                    .collect::<Vec<_>>();
+
+                for i in hourly_indexes {
+                    delete_intents[i].intent = IntentType::Keep;
+                }
+                for i in daily_indexes {
+                    delete_intents[i].intent = IntentType::Keep;
+                }
+                for i in weekly_indexes {
+                    delete_intents[i].intent = IntentType::Keep;
+                }
+                for i in monthly_indexes {
+                    delete_intents[i].intent = IntentType::Keep;
+                }
+                for i in yearly_indexes {
+                    delete_intents[i].intent = IntentType::Keep;
+                }
+            }
+        };
     }
 }
 
