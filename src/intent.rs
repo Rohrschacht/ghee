@@ -12,6 +12,7 @@ use regex::Regex;
 use tabled::{Style, Table, Tabled};
 
 use crate::duration::duration_from_str;
+use crate::executed_intent::ExecutedIntent;
 use crate::job::Job;
 use crate::policies::{PreservePolicyMin, PreservePolicyMinVariants};
 use crate::retention::Retention;
@@ -59,6 +60,38 @@ impl<'a> Intent<'a> {
             .collect::<Vec<_>>();
         let table = Table::new(intents).with(Style::modern()).to_string();
         info!("{}", table);
+    }
+
+    pub fn execute(&self) -> ExecutedIntent {
+        match self.intent {
+            IntentType::Create => {
+                let res = btrfs::create_snapshot(
+                    &self.subvolume,
+                    &format!("{}/{}", self.target, self.name),
+                    btrfs::CreateSnapshotFlags::READ_ONLY,
+                    None,
+                );
+                match res {
+                    Ok(_) => ExecutedIntent::new(self, true),
+                    Err(e) => {
+                        warn!("creating snapshot failed! error: {}", e);
+                        ExecutedIntent::new(self, false)
+                    }
+                }
+            }
+            IntentType::Keep => ExecutedIntent::new(self, true),
+            IntentType::Delete => {
+                let res =
+                    btrfs::delete_subvolume(&self.target, btrfs::DeleteSubvolumeFlags::empty());
+                match res {
+                    Ok(_) => ExecutedIntent::new(self, true),
+                    Err(e) => {
+                        warn!("deleting snapshot failed! error: {}", e);
+                        ExecutedIntent::new(self, false)
+                    }
+                }
+            }
+        }
     }
 
     pub fn gather_create_intents(jobs: &'a [Job]) -> Vec<Rc<RefCell<Self>>> {

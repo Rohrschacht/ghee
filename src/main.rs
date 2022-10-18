@@ -6,11 +6,13 @@ use clap_verbosity_flag::InfoLevel;
 use log::{debug, error, info, trace, warn};
 use serde::Deserialize;
 
+use crate::executed_intent::ExecutedIntent;
 use crate::intent::Intent;
 use crate::job::Job;
 
 mod duration;
 mod error;
+mod executed_intent;
 mod intent;
 mod job;
 mod policies;
@@ -97,9 +99,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Prune { groups } => {
             debug!("Will prune with groups: {:?}", groups);
+            info!("Actions that will be performed:");
+
+            let filtered_jobs = Job::filter_active_groups(&config.jobs, &groups);
+            debug!("jobs filtered using active groups: {:?}", filtered_jobs);
+
+            let mut intents = Intent::gather_delete_intents(&filtered_jobs[..]);
+            Intent::delete_to_keep_intents(&mut intents, &filtered_jobs[..]);
+
+            debug!("raw intents: {:?}", intents);
+            Intent::print_tabled(&intents);
+
+            let executed_intents = intents
+                .into_iter()
+                .map(|i| i.borrow().execute())
+                .collect::<Vec<_>>();
+            ExecutedIntent::print_tabled(&executed_intents);
         }
         Commands::Run { groups } => {
             debug!("Will run with groups: {:?}", groups);
+            info!("Actions that will be performed:");
+
+            let filtered_jobs = Job::filter_active_groups(&config.jobs, &groups);
+            debug!("jobs filtered using active groups: {:?}", filtered_jobs);
+
+            let mut intents = Intent::gather_create_intents(&filtered_jobs[..]);
+            intents.append(Intent::gather_delete_intents(&filtered_jobs[..]).as_mut());
+            Intent::delete_to_keep_intents(&mut intents, &filtered_jobs[..]);
+
+            debug!("raw intents: {:?}", intents);
+            Intent::print_tabled(&intents);
+
+            let executed_intents = intents
+                .into_iter()
+                .map(|i| i.borrow().execute())
+                .collect::<Vec<_>>();
+            ExecutedIntent::print_tabled(&executed_intents);
         }
     }
 
