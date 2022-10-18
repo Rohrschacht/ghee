@@ -4,7 +4,7 @@ use std::fs;
 use std::ops::{Add, Sub};
 use std::path::Path;
 
-use chrono::{DateTime, Duration, DurationRound, FixedOffset, Local, SecondsFormat, TimeZone, Utc};
+use chrono::{DateTime, Duration, FixedOffset, Local, SecondsFormat};
 use clap::{Parser, Subcommand};
 use libbtrfsutil as btrfs;
 use regex::Regex;
@@ -13,9 +13,11 @@ use tabled::{Style, Table, Tabled};
 
 use crate::error::DurationParseError;
 use crate::retention::Retention;
+use crate::timebins::TimeBins;
 
-mod retention;
 mod error;
+mod retention;
+mod timebins;
 
 /// Automated btrfs snapshots
 #[derive(Debug, Parser)]
@@ -252,23 +254,6 @@ fn timestamp_from_intent(intent: &Intent) -> DateTime<FixedOffset> {
     timestamp
 }
 
-fn time_bins_from_timestamp(
-    ts: &DateTime<FixedOffset>,
-) -> (
-    DateTime<FixedOffset>,
-    DateTime<FixedOffset>,
-    DateTime<FixedOffset>,
-    DateTime<FixedOffset>,
-    DateTime<FixedOffset>,
-) {
-    let hourly = ts.duration_trunc(Duration::hours(1)).unwrap();
-    let daily = ts.duration_trunc(Duration::days(1)).unwrap();
-    let weekly = ts.duration_trunc(Duration::weeks(1)).unwrap();
-    let monthly = ts.duration_trunc(Duration::weeks(4)).unwrap();
-    let yearly = ts.duration_trunc(Duration::days(365)).unwrap();
-    (hourly, daily, weekly, monthly, yearly)
-}
-
 fn delete_to_keep_intents(intents: &mut Vec<Intent>, jobs: &[Job]) {
     for job in jobs {
         let delete_intents = intents
@@ -277,50 +262,50 @@ fn delete_to_keep_intents(intents: &mut Vec<Intent>, jobs: &[Job]) {
             .map(|i| (timestamp_from_intent(&i), i));
 
         let mut job_intents = delete_intents
-            .filter(|t| t.1.job == job)
+            .filter(|(_ts, int)| int.job == job)
             .collect::<Vec<_>>();
         job_intents.sort_by_key(|t| Reverse(t.0));
         let job_intents = job_intents.into_iter();
 
         match &job.preserve.min {
             PreservePolicyMin::Variant(PreservePolicyMinVariants::All) => {
-                job_intents.for_each(|t| t.1.intent = IntentType::Keep);
+                job_intents.for_each(|(_ts, int)| int.intent = IntentType::Keep);
             }
             PreservePolicyMin::Variant(PreservePolicyMinVariants::Latest) => {
                 job_intents
                     .take(1)
-                    .for_each(|t| t.1.intent = IntentType::Keep);
+                    .for_each(|(_ts, int)| int.intent = IntentType::Keep);
             }
             PreservePolicyMin::Timespan(ts) => {
                 let d = duration_from_str(ts);
                 match d {
                     Err(e) => {
                         eprintln!("error while handling preserve min for job: {}\nerror: {}\nfor safety, will not delete any snapshots from this job!", &job.subvolume, e);
-                        job_intents.for_each(|t| t.1.intent = IntentType::Keep);
+                        job_intents.for_each(|(_ts, int)| int.intent = IntentType::Keep);
                     }
                     Ok(d) => {
                         println!("{:?}", d);
                         job_intents
-                            .take_while(|t| t.0 > Local::now().sub(d))
-                            .for_each(|t| t.1.intent = IntentType::Keep)
+                            .take_while(|(ts, _int)| ts > &Local::now().sub(d))
+                            .for_each(|(_ts, int)| int.intent = IntentType::Keep)
                     }
                 };
             }
             PreservePolicyMin::Count(n) => {
                 job_intents
                     .take(n.clone())
-                    .for_each(|t| t.1.intent = IntentType::Keep);
+                    .for_each(|(_ts, int)| int.intent = IntentType::Keep);
             }
         };
 
         // parse retention policy and set corresponding intents to keep
         let delete_intents = intents
             .into_iter()
-            .filter(|i| i.intent == IntentType::Delete)
-            .map(|i| (timestamp_from_intent(&i), i));
+            .filter(|int| int.intent == IntentType::Delete)
+            .map(|int| (timestamp_from_intent(&int), int));
 
         let mut job_intents = delete_intents
-            .filter(|t| t.1.job == job)
+            .filter(|(_ts, int)| int.job == job)
             .collect::<Vec<_>>();
         job_intents.sort_by_key(|t| Reverse(t.0));
         let job_intents = job_intents.into_iter();
@@ -329,14 +314,12 @@ fn delete_to_keep_intents(intents: &mut Vec<Intent>, jobs: &[Job]) {
         match retention {
             Err(e) => {
                 eprintln!("error while handling preserve retention for job: {}\nerror: {}\nfor safety, will not delete any snapshots from this job!", &job.subvolume, e);
-                job_intents.for_each(|t| t.1.intent = IntentType::Keep);
+                job_intents.for_each(|(_ts, int)| int.intent = IntentType::Keep);
             }
             Ok(retention) => {
-                let oldest: DateTime<FixedOffset> = Utc.ymd(0, 1, 1).and_hms(0, 0, 0).into();
-
                 let timebinned_intents = job_intents
-                    .map(|t| time_bins_from_timestamp(&t.0))
-                    .chain([(oldest, oldest, oldest, oldest, oldest)])
+                    .map(|(ts, _int)| TimeBins::new(&ts))
+                    .chain([TimeBins::oldest()])
                     .collect::<Vec<_>>();
 
                 let timebins_current_and_next = timebinned_intents
@@ -346,32 +329,32 @@ fn delete_to_keep_intents(intents: &mut Vec<Intent>, jobs: &[Job]) {
 
                 let hourly_indexes = timebins_current_and_next
                     .clone()
-                    .filter(|t| t.1.0.0 != t.1.1.0)
-                    .map(|t| t.0)
+                    .filter(|(_i, bins)| bins.0.h != bins.1.h)
+                    .map(|(i, _bins)| i)
                     .take(retention.h)
                     .collect::<Vec<_>>();
                 let daily_indexes = timebins_current_and_next
                     .clone()
-                    .filter(|t| t.1.0.1 != t.1.1.1)
-                    .map(|t| t.0)
+                    .filter(|(_i, bins)| bins.0.d != bins.1.d)
+                    .map(|(i, _bins)| i)
                     .take(retention.d)
                     .collect::<Vec<_>>();
                 let weekly_indexes = timebins_current_and_next
                     .clone()
-                    .filter(|t| t.1.0.2 != t.1.1.2)
-                    .map(|t| t.0)
+                    .filter(|(_i, bins)| bins.0.w != bins.1.w)
+                    .map(|(i, _bins)| i)
                     .take(retention.w)
                     .collect::<Vec<_>>();
                 let monthly_indexes = timebins_current_and_next
                     .clone()
-                    .filter(|t| t.1.0.3 != t.1.1.3)
-                    .map(|t| t.0)
+                    .filter(|(_i, bins)| bins.0.m != bins.1.m)
+                    .map(|(i, _bins)| i)
                     .take(retention.m)
                     .collect::<Vec<_>>();
                 let yearly_indexes = timebins_current_and_next
                     .clone()
-                    .filter(|t| t.1.0.4 != t.1.1.4)
-                    .map(|t| t.0)
+                    .filter(|(_i, bins)| bins.0.y != bins.1.y)
+                    .map(|(i, _bins)| i)
                     .take(retention.y)
                     .collect::<Vec<_>>();
 
@@ -384,6 +367,12 @@ fn delete_to_keep_intents(intents: &mut Vec<Intent>, jobs: &[Job]) {
                 let mut delete_intents = intents
                     .into_iter()
                     .filter(|i| i.intent == IntentType::Delete)
+                    .map(|i| (timestamp_from_intent(&i), i))
+                    .collect::<Vec<_>>();
+                delete_intents.sort_by_key(|t| Reverse(t.0));
+                let mut delete_intents = delete_intents
+                    .into_iter()
+                    .map(|(_ts, int)| int)
                     .collect::<Vec<_>>();
 
                 for i in hourly_indexes {
