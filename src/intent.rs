@@ -5,6 +5,7 @@ use std::path::Path;
 
 use chrono::{DateTime, FixedOffset, Local, SecondsFormat};
 use libbtrfsutil as btrfs;
+use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use tabled::{Style, Table, Tabled};
 
@@ -64,10 +65,13 @@ impl<'a> Intent<'a> {
 
             let subvolume_test = btrfs::is_subvolume(&job.subvolume);
             match subvolume_test {
-                Err(e) => eprintln!("{} is not a btrfs subvolume! {}", &job.subvolume, e),
+                Err(e) => warn!("{} is not a btrfs subvolume! Error: {}", &job.subvolume, e),
                 Ok(is_subvol) => {
                     if !is_subvol {
-                        eprintln!("{} is not a btrfs subvolume!", &job.subvolume);
+                        warn!(
+                            "{} is not a btrfs subvolume! Can't create a snapshot of it!",
+                            &job.subvolume
+                        );
                     } else {
                         create_intents.push(Intent {
                             intent: IntentType::Create,
@@ -147,11 +151,11 @@ impl<'a> Intent<'a> {
                     let d = duration_from_str(ts);
                     match d {
                         Err(e) => {
-                            eprintln!("error while handling preserve min for job: {}\nerror: {}\nfor safety, will not delete any snapshots from this job!", &job.subvolume, e);
+                            warn!("error while handling preserve min for job: {}\nerror: {}\nfor safety, will not delete any snapshots from this job!", &job.subvolume, e);
                             job_intents.for_each(|(_ts, int)| int.intent = IntentType::Keep);
                         }
                         Ok(d) => {
-                            println!("{:?}", d);
+                            debug!("parsed duration for preserve min: {:?}", d);
                             job_intents
                                 .take_while(|(ts, _int)| ts > &Local::now().sub(d))
                                 .for_each(|(_ts, int)| int.intent = IntentType::Keep)
@@ -180,7 +184,7 @@ impl<'a> Intent<'a> {
             let retention = Retention::from_str(&job.preserve.retention);
             match retention {
                 Err(e) => {
-                    eprintln!("error while handling preserve retention for job: {}\nerror: {}\nfor safety, will not delete any snapshots from this job!", &job.subvolume, e);
+                    warn!("error while handling preserve retention for job: {}\nerror: {}\nfor safety, will not delete any snapshots from this job!", &job.subvolume, e);
                     job_intents.for_each(|(_ts, int)| int.intent = IntentType::Keep);
                 }
                 Ok(retention) => {
@@ -225,11 +229,26 @@ impl<'a> Intent<'a> {
                         .take(retention.y)
                         .collect::<Vec<_>>();
 
-                    println!("{:?}", hourly_indexes);
-                    println!("{:?}", daily_indexes);
-                    println!("{:?}", weekly_indexes);
-                    println!("{:?}", monthly_indexes);
-                    println!("{:?}", yearly_indexes);
+                    trace!(
+                        "indexes of delete intents to keep hourly:\t{:?}",
+                        hourly_indexes
+                    );
+                    trace!(
+                        "indexes of delete intents to keep daily:\t{:?}",
+                        daily_indexes
+                    );
+                    trace!(
+                        "indexes of delete intents to keep weekly:\t{:?}",
+                        weekly_indexes
+                    );
+                    trace!(
+                        "indexes of delete intents to keep monthly:\t{:?}",
+                        monthly_indexes
+                    );
+                    trace!(
+                        "indexes of delete intents to keep yearly:\t{:?}",
+                        yearly_indexes
+                    );
 
                     let mut delete_intents = intents
                         .into_iter()

@@ -1,6 +1,8 @@
 use std::fs;
 
 use clap::{Parser, Subcommand};
+use clap_verbosity_flag::WarnLevel;
+use log::{debug, error, info, trace, warn};
 use serde::Deserialize;
 
 use crate::intent::Intent;
@@ -23,6 +25,8 @@ struct Cli {
     config: String,
     #[clap(subcommand)]
     command: Commands,
+    #[clap(flatten)]
+    verbose: clap_verbosity_flag::Verbosity<WarnLevel>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -56,31 +60,41 @@ struct Config {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Cli::parse();
-    println!("{:?}", args);
+    let args: Cli = Cli::parse();
+    debug!("program arguments: {:?}", args);
+
+    simple_logger::SimpleLogger::new()
+        .with_level(args.verbose.log_level_filter())
+        .with_colors(true)
+        .without_timestamps()
+        .init()
+        .unwrap();
 
     let config = fs::read_to_string(args.config)?;
-    println!("{}", config);
+    debug!("configuration content:\n{}", config);
     let config: Config = serde_yaml::from_str(&config)?;
-    println!("{:?}", config);
+    debug!("parsed configuration: {:?}", config);
 
     match args.command {
         Commands::Dryrun { groups } => {
-            println!("Will dry run with groups: {:?}", groups);
+            info!("Will perform a dry run without executing the intents.");
+            debug!("Will dry run with groups: {:?}", groups);
 
             let filtered_jobs = Job::filter_active_groups(&config.jobs, &groups);
+            debug!("jobs filtered using active groups: {:?}", filtered_jobs);
 
             let mut intents = Intent::gather_create_intents(&filtered_jobs[..]);
             intents.append(Intent::gather_delete_intents(&filtered_jobs[..]).as_mut());
             Intent::delete_to_keep_intents(&mut intents, &filtered_jobs[..]);
-            println!("{:?}", intents);
+
+            debug!("raw intents: {:?}", intents);
             Intent::print_tabled(&intents);
         }
         Commands::Prune { groups } => {
-            println!("Will dry run with groups: {:?}", groups);
+            debug!("Will prune with groups: {:?}", groups);
         }
         Commands::Run { groups } => {
-            println!("Will dry run with groups: {:?}", groups);
+            debug!("Will run with groups: {:?}", groups);
         }
     }
 
