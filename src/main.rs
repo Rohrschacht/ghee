@@ -26,6 +26,9 @@ mod timebins;
 struct Cli {
     #[clap(short, long, default_value = "/etc/ghee/ghee.yaml")]
     config: String,
+    /// Dry run, don't perform any actions
+    #[clap(short = 'n', long, default_value = "false")]
+    dryrun: bool,
     #[clap(subcommand)]
     command: Commands,
     #[clap(flatten)]
@@ -110,11 +113,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             debug!("raw intents: {:?}", intents);
             Intent::print_tabled(&intents);
 
-            let executed_intents = intents
-                .into_iter()
-                .map(|i| i.borrow().execute())
-                .collect::<Vec<_>>();
-            ExecutedIntent::print_tabled(&executed_intents);
+            if !args.dryrun {
+                let executed_intents = intents
+                    .into_iter()
+                    .map(|i| i.borrow().execute())
+                    .collect::<Vec<_>>();
+                ExecutedIntent::print_tabled(&executed_intents);
+            }
         }
         Commands::Run { groups } => {
             debug!("Will run with groups: {:?}", groups);
@@ -130,11 +135,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             debug!("raw intents: {:?}", intents);
             Intent::print_tabled(&intents);
 
-            let executed_intents = intents
-                .into_iter()
-                .map(|i| i.borrow().execute())
-                .collect::<Vec<_>>();
-            ExecutedIntent::print_tabled(&executed_intents);
+            if !args.dryrun {
+                let executed_intents = intents
+                    .into_iter()
+                    .map(|i| i.borrow().execute())
+                    .collect::<Vec<_>>();
+                ExecutedIntent::print_tabled(&executed_intents);
+            }
         }
     }
 
