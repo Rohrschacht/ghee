@@ -1,22 +1,21 @@
 use std::error::Error;
 use std::ops::Add;
 
-use chrono::{Datelike, DateTime, Duration, FixedOffset, Timelike, TimeZone, Weekday};
 use chrono::LocalResult::Single;
+use chrono::{DateTime, Datelike, Duration, FixedOffset, TimeZone, Timelike, Weekday};
 use regex::Regex;
 
 use crate::error::DurationParseError;
 
 pub fn duration_from_str(s: &str) -> Result<Duration, Box<dyn Error>> {
-    let re = Regex::new(r"^(?:(\d+)h)?\s*(?:(\d+)d)?\s*(?:(\d+)w)?\s*(?:(\d+)m)?\s*(?:(\d+)y)?$")
-        .unwrap();
+    let re = Regex::new(r"^(?:(\d+)h)?\s*(?:(\d+)d)?\s*(?:(\d+)w)?\s*(?:(\d+)m)?\s*(?:(\d+)y)?$")?;
     let mut d = Duration::zero();
 
     if !re.is_match(s) {
         return Err(Box::new(DurationParseError));
     };
 
-    let capture = re.captures(s).unwrap();
+    let capture = re.captures(s).ok_or(Box::new(DurationParseError))?;
 
     let hours = capture.get(1);
     let days = capture.get(2);

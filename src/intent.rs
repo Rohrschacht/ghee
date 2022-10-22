@@ -140,22 +140,57 @@ impl<'a> Intent<'a> {
                 &subvolume_path.file_name().unwrap().to_str().unwrap(),
                 r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:\d{2})?"
             );
-            // println!("{}", re);
             let re = Regex::new(&re).unwrap();
 
-            let paths = fs::read_dir(&job.target).unwrap();
-            for path in paths {
-                let path = path.unwrap();
-                if path.metadata().unwrap().is_dir() {
-                    if re.is_match(path.file_name().to_str().unwrap()) {
-                        // println!("{}", path.file_name().to_str().unwrap());
-                        delete_intents.push(Rc::new(RefCell::new(Intent {
-                            intent: IntentType::Delete,
-                            subvolume: job.subvolume.clone(),
-                            target: path.path().to_str().unwrap().to_string(),
-                            name: path.file_name().to_str().unwrap().to_string(),
-                            job,
-                        })));
+            let paths = fs::read_dir(&job.target);
+            match paths {
+                Err(e) => error!("Unable to read directory {}! Error: {}", &job.target, e),
+                Ok(paths) => {
+                    for path in paths {
+                        match path {
+                            Err(e) => error!(
+                                "IO error occured when accessing {}! Error: {}",
+                                &job.target, e
+                            ),
+                            Ok(path) => match path.metadata() {
+                                Err(e) => error!(
+                                    "Unable to read metadata of {:?}! Error: {}",
+                                    path.path(),
+                                    e
+                                ),
+                                Ok(metadata) => {
+                                    if metadata.is_dir() {
+                                        match path.file_name().to_str() {
+                                            None => error!(
+                                                "Unable to parse Unicode from path {:?}!",
+                                                path.path()
+                                            ),
+                                            Some(filename) => {
+                                                if re.is_match(filename) {
+                                                    delete_intents.push(Rc::new(RefCell::new(
+                                                        Intent {
+                                                            intent: IntentType::Delete,
+                                                            subvolume: job.subvolume.clone(),
+                                                            target: path
+                                                                .path()
+                                                                .to_str()
+                                                                .unwrap()
+                                                                .to_string(),
+                                                            name: path
+                                                                .file_name()
+                                                                .to_str()
+                                                                .unwrap()
+                                                                .to_string(),
+                                                            job,
+                                                        },
+                                                    )));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        }
                     }
                 }
             }

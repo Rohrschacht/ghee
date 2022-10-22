@@ -25,14 +25,13 @@ impl Retention {
 
     pub fn from_str(s: &str) -> Result<Self, Box<dyn Error>> {
         let re =
-            Regex::new(r"^(?:(\d+)h)?\s*(?:(\d+)d)?\s*(?:(\d+)w)?\s*(?:(\d+)m)?\s*(?:(\d+)y)?$")
-                .unwrap();
+            Regex::new(r"^(?:(\d+)h)?\s*(?:(\d+)d)?\s*(?:(\d+)w)?\s*(?:(\d+)m)?\s*(?:(\d+)y)?$")?;
 
         if !re.is_match(s) {
             return Err(Box::new(DurationParseError));
         };
 
-        let capture = re.captures(s).unwrap();
+        let capture = re.captures(s).ok_or(Box::new(DurationParseError))?;
 
         let hours = capture.get(1);
         let days = capture.get(2);
@@ -43,19 +42,19 @@ impl Retention {
         let mut r = Retention::zero();
 
         if let Some(h) = hours {
-            r.h = h.as_str().parse().unwrap()
+            r.h = h.as_str().parse()?
         }
         if let Some(days) = days {
-            r.d = days.as_str().parse().unwrap()
+            r.d = days.as_str().parse()?
         }
         if let Some(w) = weeks {
-            r.w = w.as_str().parse().unwrap()
+            r.w = w.as_str().parse()?
         }
         if let Some(m) = months {
-            r.m = m.as_str().parse().unwrap()
+            r.m = m.as_str().parse()?
         }
         if let Some(y) = years {
-            r.y = y.as_str().parse().unwrap()
+            r.y = y.as_str().parse()?
         }
 
         Ok(r)
