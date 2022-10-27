@@ -29,15 +29,15 @@ pub struct TimeBins<'a> {
 
 impl<'a> TimeBins<'a> {
     pub fn new(retention: &Retention) -> Self {
-        let mut h: HashMap<DateTime<FixedOffset>, Rc<RefCell<Intent>>> = HashMap::new();
+        let h: HashMap<DateTime<FixedOffset>, Rc<RefCell<Intent>>> = HashMap::new();
         let mut rh: Vec<DateTime<FixedOffset>> = Vec::new();
-        let mut d: HashMap<DateTime<FixedOffset>, Rc<RefCell<Intent>>> = HashMap::new();
+        let d: HashMap<DateTime<FixedOffset>, Rc<RefCell<Intent>>> = HashMap::new();
         let mut rd: Vec<DateTime<FixedOffset>> = Vec::new();
-        let mut w: HashMap<DateTime<FixedOffset>, Rc<RefCell<Intent>>> = HashMap::new();
+        let w: HashMap<DateTime<FixedOffset>, Rc<RefCell<Intent>>> = HashMap::new();
         let mut rw: Vec<DateTime<FixedOffset>> = Vec::new();
-        let mut m: HashMap<DateTime<FixedOffset>, Rc<RefCell<Intent>>> = HashMap::new();
+        let m: HashMap<DateTime<FixedOffset>, Rc<RefCell<Intent>>> = HashMap::new();
         let mut rm: Vec<DateTime<FixedOffset>> = Vec::new();
-        let mut y: HashMap<DateTime<FixedOffset>, Rc<RefCell<Intent>>> = HashMap::new();
+        let y: HashMap<DateTime<FixedOffset>, Rc<RefCell<Intent>>> = HashMap::new();
         let mut ry: Vec<DateTime<FixedOffset>> = Vec::new();
 
         let local_now: DateTime<Local> = Local::now();

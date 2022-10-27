@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use crate::policies::PreservePolicy;
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 pub struct Job {
     pub subvolume: String,
     pub target: String,
@@ -18,7 +18,7 @@ impl Job {
                 .cloned()
                 .collect::<Vec<_>>()
         } else {
-            jobs.iter().cloned().collect::<Vec<_>>()
+            jobs.to_vec()
         };
 
         filtered_jobs

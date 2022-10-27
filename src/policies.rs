@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 pub struct PreservePolicy {
     pub retention: String,
     pub min: PreservePolicyMin,
@@ -12,7 +12,7 @@ pub enum RetentionPolicy {
     Policy(String),
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(untagged)]
 pub enum PreservePolicyMin {
     Variant(PreservePolicyMinVariants),
@@ -20,7 +20,7 @@ pub enum PreservePolicyMin {
     Count(usize),
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 pub enum PreservePolicyMinVariants {
     #[serde(alias = "all")]
     All,

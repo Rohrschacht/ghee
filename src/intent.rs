@@ -18,7 +18,7 @@ use crate::policies::{PreservePolicyMin, PreservePolicyMinVariants};
 use crate::retention::Retention;
 use crate::timebins::TimeBins;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum IntentType {
     Create,
     Keep,
@@ -55,7 +55,7 @@ impl<'a> Intent<'a> {
 
     pub fn print_tabled(intents: &[Rc<RefCell<Self>>]) {
         let intents = intents
-            .into_iter()
+            .iter()
             .map(|r| (*r.borrow()).clone())
             .collect::<Vec<_>>();
         let table = Table::new(intents).with(Style::modern()).to_string();
@@ -199,10 +199,10 @@ impl<'a> Intent<'a> {
         delete_intents
     }
 
-    pub fn delete_to_keep_intents(intents: &mut Vec<Rc<RefCell<Self>>>, jobs: &[Job]) {
+    pub fn delete_to_keep_intents(intents: &mut [Rc<RefCell<Self>>], jobs: &[Job]) {
         for job in jobs {
             let delete_intents = intents
-                .into_iter()
+                .iter_mut()
                 .filter(|int| int.borrow().intent == IntentType::Delete)
                 .map(|int| (int.borrow().timestamp(), Rc::clone(int)));
 
@@ -243,14 +243,14 @@ impl<'a> Intent<'a> {
                 }
                 PreservePolicyMin::Count(n) => {
                     job_intents
-                        .take(n.clone())
+                        .take(*n)
                         .for_each(|(_ts, int)| (*int).borrow_mut().intent = IntentType::Keep);
                 }
             };
 
             // parse retention policy and set corresponding intents to keep
             let delete_intents = intents
-                .into_iter()
+                .iter_mut()
                 .filter(|int| int.borrow().intent == IntentType::Delete)
                 .map(|int| (int.borrow().timestamp(), Rc::clone(int)));
 
