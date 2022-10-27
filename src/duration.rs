@@ -3,6 +3,7 @@ use std::ops::Add;
 
 use chrono::LocalResult::Single;
 use chrono::{DateTime, Datelike, Duration, FixedOffset, TimeZone, Timelike, Weekday};
+use log::trace;
 use regex::Regex;
 
 use crate::error::DurationParseError;
@@ -23,11 +24,11 @@ pub fn duration_from_str(s: &str) -> Result<Duration, Box<dyn Error>> {
     let months = capture.get(4);
     let years = capture.get(5);
 
-    println!("{:?}", hours);
-    println!("{:?}", days);
-    println!("{:?}", weeks);
-    println!("{:?}", months);
-    println!("{:?}", years);
+    trace!("{:?}", hours);
+    trace!("{:?}", days);
+    trace!("{:?}", weeks);
+    trace!("{:?}", months);
+    trace!("{:?}", years);
 
     if let Some(h) = hours {
         d = d.add(Duration::hours(h.as_str().parse()?));
