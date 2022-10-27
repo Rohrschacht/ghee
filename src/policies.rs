@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 pub struct PreservePolicy {
-    pub retention: String,
+    pub retention: Option<String>,
     pub min: PreservePolicyMin,
 }
 

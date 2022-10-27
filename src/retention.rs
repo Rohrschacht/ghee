@@ -23,6 +23,13 @@ impl Retention {
         }
     }
 
+    pub fn from_str_option(o: &Option<String>) -> Result<Self, Box<dyn Error>> {
+        match o {
+            None => Ok(Self::zero()),
+            Some(s) => Self::from_str(&s[..]),
+        }
+    }
+
     pub fn from_str(s: &str) -> Result<Self, Box<dyn Error>> {
         let re =
             Regex::new(r"^(?:(\d+)h)?\s*(?:(\d+)d)?\s*(?:(\d+)w)?\s*(?:(\d+)m)?\s*(?:(\d+)y)?$")?;

@@ -260,7 +260,7 @@ impl<'a> Intent<'a> {
             job_intents.sort_by_key(|t| Reverse(t.0));
             let job_intents = job_intents.into_iter();
 
-            let retention = Retention::from_str(&job.preserve.retention);
+            let retention = Retention::from_str_option(&job.preserve.retention);
             match retention {
                 Err(e) => {
                     warn!("error while handling preserve retention for job: {}\nerror: {}\nfor safety, will not delete any snapshots from this job!", &job.subvolume, e);
