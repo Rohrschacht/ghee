@@ -1,11 +1,14 @@
+use std::ffi::OsStr;
 use std::fs;
 use std::io::Write;
+use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::InfoLevel;
 use log::{debug, error, info, trace, warn};
 use serde::Deserialize;
 
+use crate::error::ConfigfileExtensionError;
 use crate::executed_intent::ExecutedIntent;
 use crate::intent::Intent;
 use crate::job::Job;
@@ -80,9 +83,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter_level(args.verbose.log_level_filter())
         .init();
 
-    let config = fs::read_to_string(args.config)?;
+    let config = fs::read_to_string(&args.config)?;
     debug!("configuration content:\n{}", config);
-    let config: Config = serde_yaml::from_str(&config)?;
+
+    let filepath = PathBuf::from(&args.config);
+    let fileextension = filepath.extension().ok_or(ConfigfileExtensionError)?;
+    let filetype = fileextension.to_str().ok_or(ConfigfileExtensionError)?;
+    let config: Config = match filetype {
+        "yaml" | "yml" => serde_yaml::from_str(&config)?,
+        "json" => serde_json::from_str(&config)?,
+        "toml" => toml::from_str(&config)?,
+        &_ => return Err(Box::new(ConfigfileExtensionError))
+    };
+
     debug!("parsed configuration: {:?}", config);
 
     match args.command {

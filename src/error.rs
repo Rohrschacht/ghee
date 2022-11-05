@@ -11,3 +11,14 @@ impl Display for DurationParseError {
 }
 
 impl Error for DurationParseError {}
+
+#[derive(Debug)]
+pub struct ConfigfileExtensionError;
+
+impl Display for ConfigfileExtensionError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Error while parsing file extension from configuration file name")
+    }
+}
+
+impl Error for ConfigfileExtensionError {}
