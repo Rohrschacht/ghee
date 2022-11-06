@@ -1,0 +1,33 @@
+[[jobs]]
+subvolume = "/home"
+target = "/mnt/btrfs/@/gheesnaps"
+groups = ["volumes", "home"]
+
+[jobs.preserve]
+retention = "10h 14d"
+min = 10
+
+[[jobs]]
+subvolume = "/etc"
+target = "/mnt/btrfs/@/gheesnaps"
+groups = ["volumes", "etc"]
+
+[jobs.preserve]
+retention = "48h 14d"
+min = "5d"
+
+[[jobs]]
+subvolume = "/var/lib/postgres"
+target = "/mnt/btrfs/@/gheesnaps"
+groups = ["database"]
+
+[jobs.preserve]
+retention = "48h 14d 4w 6m 2y"
+min = 0
+
+[[jobs]]
+subvolume = "/var/lib/mongodb"
+target = "/mnt/btrfs/@/gheesnaps"
+
+[jobs.preserve]
+min = "all"

@@ -1,0 +1,28 @@
+jobs:
+  - subvolume: /home
+    target: /mnt/btrfs/@/gheesnaps
+    groups:
+      - volumes
+      - home
+    preserve:
+      retention: 10h 14d
+      min: 10
+  - subvolume: /etc
+    target: /mnt/btrfs/@/gheesnaps
+    groups:
+      - volumes
+      - etc
+    preserve:
+      retention: 48h 14d
+      min: 5d
+  - subvolume: /var/lib/postgres
+    target: /mnt/btrfs/@/gheesnaps
+    groups:
+      - database
+    preserve:
+      retention: 48h 14d 4w 6m 2y
+      min: 0
+  - subvolume: /var/lib/mongodb
+    target: /mnt/btrfs/@/gheesnaps
+    preserve:
+      min: all
