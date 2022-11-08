@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::InfoLevel;
-use log::{debug, error, info, trace, warn};
+use log::{debug, info};
 use serde::Deserialize;
 
 use crate::error::ConfigfileExtensionError;
@@ -92,7 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "yaml" | "yml" => serde_yaml::from_str(&config)?,
         "json" => serde_json::from_str(&config)?,
         "toml" => toml::from_str(&config)?,
-        &_ => return Err(Box::new(ConfigfileExtensionError))
+        &_ => return Err(Box::new(ConfigfileExtensionError)),
     };
 
     debug!("parsed configuration: {:?}", config);
@@ -126,10 +126,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Intent::print_tabled(&intents);
 
             if !args.dryrun {
-                let executed_intents = intents
-                    .into_iter()
-                    .map(|i| i.borrow().execute())
-                    .collect::<Vec<_>>();
+                let executed_intents = intents.into_iter().map(|i| i.borrow().execute()).collect::<Vec<_>>();
                 ExecutedIntent::print_tabled(&executed_intents);
             }
         }
@@ -148,10 +145,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Intent::print_tabled(&intents);
 
             if !args.dryrun {
-                let executed_intents = intents
-                    .into_iter()
-                    .map(|i| i.borrow().execute())
-                    .collect::<Vec<_>>();
+                let executed_intents = intents.into_iter().map(|i| i.borrow().execute()).collect::<Vec<_>>();
                 ExecutedIntent::print_tabled(&executed_intents);
             }
         }

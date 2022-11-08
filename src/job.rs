@@ -15,13 +15,7 @@ impl Job {
         let filtered_jobs = if !groups.is_empty() {
             jobs.iter()
                 .filter(|j| j.groups.is_some())
-                .filter(|j| {
-                    j.groups
-                        .as_ref()
-                        .unwrap()
-                        .iter()
-                        .any(|jg| groups.contains(jg))
-                })
+                .filter(|j| j.groups.as_ref().unwrap().iter().any(|jg| groups.contains(jg)))
                 .cloned()
                 .collect::<Vec<_>>()
         } else {

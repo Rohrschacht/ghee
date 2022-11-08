@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use chrono::{DateTime, FixedOffset, Local, SecondsFormat};
 use libbtrfsutil as btrfs;
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, warn};
 use regex::Regex;
 use tabled::{Style, Table, Tabled};
 
@@ -46,18 +46,14 @@ impl<'a> Intent<'a> {
     }
 
     pub fn timestamp(&self) -> DateTime<FixedOffset> {
-        let time_re =
-            Regex::new(r".*\.(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:\d{2})?)").unwrap();
+        let time_re = Regex::new(r".*\.(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:\d{2})?)").unwrap();
         let timestamp = time_re.captures(&self.name).unwrap().get(1).unwrap();
         let timestamp = DateTime::parse_from_rfc3339(timestamp.as_str()).unwrap();
         timestamp
     }
 
     pub fn print_tabled(intents: &[Rc<RefCell<Self>>]) {
-        let intents = intents
-            .iter()
-            .map(|r| (*r.borrow()).clone())
-            .collect::<Vec<_>>();
+        let intents = intents.iter().map(|r| (*r.borrow()).clone()).collect::<Vec<_>>();
         let table = Table::new(intents).with(Style::modern()).to_string();
         info!("{}", table);
     }
@@ -81,8 +77,7 @@ impl<'a> Intent<'a> {
             }
             IntentType::Keep => ExecutedIntent::new(self, true),
             IntentType::Delete => {
-                let res =
-                    btrfs::delete_subvolume(&self.target, btrfs::DeleteSubvolumeFlags::empty());
+                let res = btrfs::delete_subvolume(&self.target, btrfs::DeleteSubvolumeFlags::empty());
                 match res {
                     Ok(_) => ExecutedIntent::new(self, true),
                     Err(e) => {
@@ -116,11 +111,7 @@ impl<'a> Intent<'a> {
                             intent: IntentType::Create,
                             subvolume: job.subvolume.clone(),
                             target: job.target.clone(),
-                            name: format!(
-                                "{}.{}",
-                                subvolume_path.file_name().unwrap().to_str().unwrap(),
-                                now_str
-                            ),
+                            name: format!("{}.{}", subvolume_path.file_name().unwrap().to_str().unwrap(), now_str),
                             job,
                         })));
                     }
@@ -143,56 +134,34 @@ impl<'a> Intent<'a> {
             let re = Regex::new(&re).unwrap();
 
             let paths = fs::read_dir(&job.target);
-            match paths {
-                Err(e) => error!("Unable to read directory {}! Error: {}", &job.target, e),
-                Ok(paths) => {
-                    for path in paths {
-                        match path {
-                            Err(e) => error!(
-                                "IO error occured when accessing {}! Error: {}",
-                                &job.target, e
-                            ),
-                            Ok(path) => match path.metadata() {
-                                Err(e) => error!(
-                                    "Unable to read metadata of {:?}! Error: {}",
-                                    path.path(),
-                                    e
-                                ),
-                                Ok(metadata) => {
-                                    if metadata.is_dir() {
-                                        match path.file_name().to_str() {
-                                            None => error!(
-                                                "Unable to parse Unicode from path {:?}!",
-                                                path.path()
-                                            ),
-                                            Some(filename) => {
-                                                if re.is_match(filename) {
-                                                    delete_intents.push(Rc::new(RefCell::new(
-                                                        Intent {
-                                                            intent: IntentType::Delete,
-                                                            subvolume: job.subvolume.clone(),
-                                                            target: path
-                                                                .path()
-                                                                .to_str()
-                                                                .unwrap()
-                                                                .to_string(),
-                                                            name: path
-                                                                .file_name()
-                                                                .to_str()
-                                                                .unwrap()
-                                                                .to_string(),
-                                                            job,
-                                                        },
-                                                    )));
-                                                }
-                                            }
-                                        }
+            if let Ok(paths) = paths {
+                for path in paths {
+                    if let Ok(path) = path {
+                        if let Ok(metadata) = path.metadata() {
+                            if metadata.is_dir() {
+                                if let Some(filename) = path.file_name().to_str() {
+                                    if re.is_match(filename) {
+                                        delete_intents.push(Rc::new(RefCell::new(Intent {
+                                            intent: IntentType::Delete,
+                                            subvolume: job.subvolume.clone(),
+                                            target: path.path().to_str().unwrap().to_string(),
+                                            name: path.file_name().to_str().unwrap().to_string(),
+                                            job,
+                                        })));
                                     }
+                                } else {
+                                    error!("Unable to parse Unicode from path {:?}!", path.path())
                                 }
-                            },
+                            }
+                        } else if let Err(e) = path.metadata() {
+                            error!("Unable to read metadata of {:?}! Error: {}", path.path(), e)
                         }
+                    } else if let Err(e) = path {
+                        error!("IO error occured when accessing {}! Error: {}", &job.target, e)
                     }
                 }
+            } else if let Err(e) = paths {
+                error!("Unable to read directory {}! Error: {}", &job.target, e)
             }
         }
 
@@ -214,8 +183,7 @@ impl<'a> Intent<'a> {
 
             match &job.preserve.min {
                 PreservePolicyMin::Variant(PreservePolicyMinVariants::All) => {
-                    job_intents
-                        .for_each(|(_ts, int)| (*int).borrow_mut().intent = IntentType::Keep);
+                    job_intents.for_each(|(_ts, int)| (*int).borrow_mut().intent = IntentType::Keep);
                 }
                 PreservePolicyMin::Variant(PreservePolicyMinVariants::Latest) => {
                     job_intents
@@ -227,17 +195,13 @@ impl<'a> Intent<'a> {
                     match d {
                         Err(e) => {
                             warn!("error while handling preserve min for job: {}\nerror: {}\nfor safety, will not delete any snapshots from this job!", &job.subvolume, e);
-                            job_intents.for_each(|(_ts, int)| {
-                                (*int).borrow_mut().intent = IntentType::Keep
-                            });
+                            job_intents.for_each(|(_ts, int)| (*int).borrow_mut().intent = IntentType::Keep);
                         }
                         Ok(d) => {
                             debug!("parsed duration for preserve min: {:?}", d);
                             job_intents
                                 .take_while(|(ts, _int)| ts > &Local::now().sub(d))
-                                .for_each(|(_ts, int)| {
-                                    (*int).borrow_mut().intent = IntentType::Keep
-                                })
+                                .for_each(|(_ts, int)| (*int).borrow_mut().intent = IntentType::Keep)
                         }
                     };
                 }
@@ -264,8 +228,7 @@ impl<'a> Intent<'a> {
             match retention {
                 Err(e) => {
                     warn!("error while handling preserve retention for job: {}\nerror: {}\nfor safety, will not delete any snapshots from this job!", &job.subvolume, e);
-                    job_intents
-                        .for_each(|(_ts, int)| (*int).borrow_mut().intent = IntentType::Keep);
+                    job_intents.for_each(|(_ts, int)| (*int).borrow_mut().intent = IntentType::Keep);
                 }
                 Ok(retention) => {
                     let mut timebins = TimeBins::new(&retention);

@@ -139,8 +139,7 @@ mod tests {
     use chrono::{Duration, FixedOffset, Local, TimeZone, Utc, Weekday};
 
     use crate::duration::{
-        duration_trunc_day, duration_trunc_hour, duration_trunc_month, duration_trunc_week,
-        duration_trunc_year,
+        duration_trunc_day, duration_trunc_hour, duration_trunc_month, duration_trunc_week, duration_trunc_year,
     };
 
     #[test]

@@ -31,8 +31,7 @@ impl Retention {
     }
 
     pub fn from_str(s: &str) -> Result<Self, Box<dyn Error>> {
-        let re =
-            Regex::new(r"^(?:(\d+)h)?\s*(?:(\d+)d)?\s*(?:(\d+)w)?\s*(?:(\d+)m)?\s*(?:(\d+)y)?$")?;
+        let re = Regex::new(r"^(?:(\d+)h)?\s*(?:(\d+)d)?\s*(?:(\d+)w)?\s*(?:(\d+)m)?\s*(?:(\d+)y)?$")?;
 
         if !re.is_match(s) {
             return Err(Box::new(DurationParseError));
